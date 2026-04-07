@@ -1,4 +1,6 @@
-"""Test Pydantic type serialization round-trips."""
+"""Test Pydantic type serialization round-trips + immutability."""
+
+import pytest
 
 from nekte.domain.types import (
     NEKTE_ERRORS,
@@ -122,4 +124,50 @@ def test_task_lifecycle_result():
 def test_nekte_errors_complete():
     assert len(NEKTE_ERRORS) == 11
     assert NEKTE_ERRORS["VERSION_MISMATCH"] == -32001
+
+
+# ---------------------------------------------------------------------------
+# Immutability tests (DDD Value Objects must be frozen)
+# ---------------------------------------------------------------------------
+
+
+def test_token_budget_is_frozen():
+    b = TokenBudget(max_tokens=500, detail_level="compact")
+    with pytest.raises(Exception):  # ValidationError from pydantic frozen
+        b.max_tokens = 999  # type: ignore[misc]
+
+
+def test_task_is_frozen():
+    t = Task(
+        id="t-1",
+        desc="test",
+        timeout_ms=5000,
+        budget=TokenBudget(max_tokens=100, detail_level="compact"),
+    )
+    with pytest.raises(Exception):
+        t.desc = "mutated"  # type: ignore[misc]
+
+
+def test_agent_card_is_frozen():
+    card = AgentCard(agent="test", endpoint="http://localhost", caps=["a"])
+    with pytest.raises(Exception):
+        card.agent = "hacked"  # type: ignore[misc]
+
+
+def test_context_envelope_is_frozen():
+    env = ContextEnvelope(
+        id="ctx-1",
+        data={"key": "value"},
+        compression="none",
+        permissions=ContextPermissions(forward=False, persist=False, derive=True),
+        ttl_s=3600,
+    )
+    with pytest.raises(Exception):
+        env.ttl_s = 0  # type: ignore[misc]
+
+
+def test_capability_ref_is_frozen():
+    ref = CapabilityRef(id="x", cat="y", h="z")
+    with pytest.raises(Exception):
+        ref.id = "mutated"  # type: ignore[misc]
     assert NEKTE_ERRORS["TASK_NOT_RESUMABLE"] == -32011

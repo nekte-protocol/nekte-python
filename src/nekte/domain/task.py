@@ -4,6 +4,9 @@ State Machine:
   pending -> accepted -> running -> completed
                       -> suspended -> running (resume)
   (any non-terminal) -> cancelled | failed
+
+All domain objects are IMMUTABLE. State transitions return new instances.
+This enforces DDD invariants: you cannot bypass the state machine.
 """
 
 from __future__ import annotations
@@ -55,18 +58,22 @@ def is_resumable(status: TaskStatus) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Value Objects
+# Value Objects (frozen — immutable)
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True)
 class TaskCheckpoint:
+    """Immutable checkpoint snapshot."""
+
     data: dict[str, Any]
     created_at: float
 
 
-@dataclass
+@dataclass(frozen=True)
 class TaskTransition:
+    """Immutable record of a single state transition."""
+
     from_status: TaskStatus
     to_status: TaskStatus
     timestamp: float
@@ -74,19 +81,76 @@ class TaskTransition:
 
 
 # ---------------------------------------------------------------------------
-# Aggregate Root
+# Aggregate Root (frozen — state changes return NEW instances)
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True)
 class TaskEntry:
+    """Immutable Aggregate Root for task lifecycle.
+
+    All state changes go through transition() or with_checkpoint(),
+    which return new TaskEntry instances. Direct mutation is impossible
+    because this dataclass is frozen.
+    """
+
     task: Task
     status: TaskStatus
     context: ContextEnvelope | None
     checkpoint: TaskCheckpoint | None
-    transitions: list[TaskTransition]
+    transitions: tuple[TaskTransition, ...]
     created_at: float
     updated_at: float
+
+    def transition(self, to: TaskStatus, reason: str | None = None) -> TaskEntry:
+        """Return a new TaskEntry with the transitioned status.
+
+        Raises TaskTransitionError if the transition is invalid.
+        """
+        if not is_valid_transition(self.status, to):
+            raise TaskTransitionError(self.task.id, self.status, to)
+
+        now = time.time()
+        new_transition = TaskTransition(
+            from_status=self.status,
+            to_status=to,
+            timestamp=now,
+            reason=reason,
+        )
+
+        return TaskEntry(
+            task=self.task,
+            status=to,
+            context=self.context,
+            checkpoint=self.checkpoint,
+            transitions=(*self.transitions, new_transition),
+            created_at=self.created_at,
+            updated_at=now,
+        )
+
+    def with_checkpoint(self, data: dict[str, Any]) -> TaskEntry:
+        """Return a new TaskEntry with checkpoint data saved.
+
+        Only valid in 'running' or 'suspended' state.
+        """
+        if self.status not in ("running", "suspended"):
+            raise ValueError(f"Cannot checkpoint task in '{self.status}' state")
+
+        now = time.time()
+        return TaskEntry(
+            task=self.task,
+            status=self.status,
+            context=self.context,
+            checkpoint=TaskCheckpoint(data=data, created_at=now),
+            transitions=self.transitions,
+            created_at=self.created_at,
+            updated_at=now,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Factory function
+# ---------------------------------------------------------------------------
 
 
 def create_task_entry(task: Task, context: ContextEnvelope | None = None) -> TaskEntry:
@@ -97,35 +161,22 @@ def create_task_entry(task: Task, context: ContextEnvelope | None = None) -> Tas
         status="pending",
         context=context,
         checkpoint=None,
-        transitions=[],
+        transitions=(),
         created_at=now,
         updated_at=now,
     )
 
 
-def transition_task(entry: TaskEntry, to: TaskStatus, reason: str | None = None) -> TaskEntry:
-    """Transition a task to a new status. Raises TaskTransitionError if invalid."""
-    if not is_valid_transition(entry.status, to):
-        raise TaskTransitionError(entry.task.id, entry.status, to)
+# ---------------------------------------------------------------------------
+# Backwards-compatible free functions (delegate to methods)
+# ---------------------------------------------------------------------------
 
-    now = time.time()
-    entry.transitions.append(
-        TaskTransition(
-            from_status=entry.status,
-            to_status=to,
-            timestamp=now,
-            reason=reason,
-        )
-    )
-    entry.status = to
-    entry.updated_at = now
-    return entry
+
+def transition_task(entry: TaskEntry, to: TaskStatus, reason: str | None = None) -> TaskEntry:
+    """Transition a task. Returns a NEW TaskEntry (old one is unchanged)."""
+    return entry.transition(to, reason)
 
 
 def save_checkpoint(entry: TaskEntry, data: dict[str, Any]) -> TaskEntry:
-    """Save a checkpoint on a running/suspended task."""
-    if entry.status not in ("running", "suspended"):
-        raise ValueError(f"Cannot checkpoint task in '{entry.status}' state")
-    entry.checkpoint = TaskCheckpoint(data=data, created_at=time.time())
-    entry.updated_at = time.time()
-    return entry
+    """Save checkpoint. Returns a NEW TaskEntry (old one is unchanged)."""
+    return entry.with_checkpoint(data)

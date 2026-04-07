@@ -8,7 +8,14 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class FrozenModel(BaseModel):
+    """Base for all domain Value Objects — immutable by default."""
+
+    model_config = ConfigDict(frozen=True)
+
 
 # ---------------------------------------------------------------------------
 # Token Budget
@@ -21,7 +28,7 @@ class DetailLevel(str, Enum):
     FULL = "full"
 
 
-class TokenBudget(BaseModel):
+class TokenBudget(FrozenModel):
     max_tokens: int = Field(gt=0)
     detail_level: DetailLevel
 
@@ -38,7 +45,7 @@ DiscoveryLevel = Literal[0, 1, 2]
 # ---------------------------------------------------------------------------
 
 
-class CapabilityRef(BaseModel):
+class CapabilityRef(FrozenModel):
     id: str
     cat: str
     h: str
@@ -63,7 +70,7 @@ Capability = Union[CapabilityRef, CapabilitySummary, CapabilitySchema]
 # ---------------------------------------------------------------------------
 
 
-class AgentCard(BaseModel):
+class AgentCard(FrozenModel):
     nekte: str = "0.2"
     agent: str
     endpoint: str
@@ -79,13 +86,13 @@ class AgentCard(BaseModel):
 ContextCompression = Literal["none", "semantic", "reference"]
 
 
-class ContextPermissions(BaseModel):
+class ContextPermissions(FrozenModel):
     forward: bool
     persist: bool
     derive: bool
 
 
-class ContextEnvelope(BaseModel):
+class ContextEnvelope(FrozenModel):
     id: str
     data: dict[str, Any]
     compression: ContextCompression
@@ -99,7 +106,7 @@ class ContextEnvelope(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class MultiLevelResult(BaseModel):
+class MultiLevelResult(FrozenModel):
     minimal: Any | None = None
     compact: dict[str, Any] | None = None
     full: dict[str, Any] | None = None
@@ -116,7 +123,7 @@ class InvokeResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class VerificationProof(BaseModel):
+class VerificationProof(FrozenModel):
     hash: str | None = None
     samples: int | None = None
     evidence: list[dict[str, Any]] | None = None
@@ -141,7 +148,7 @@ TerminalTaskStatus = Literal["completed", "failed", "cancelled"]
 ActiveTaskStatus = Literal["pending", "accepted", "running", "suspended"]
 
 
-class Task(BaseModel):
+class Task(FrozenModel):
     id: str
     desc: str
     timeout_ms: int = Field(gt=0)
@@ -179,7 +186,7 @@ class NekteRequest(BaseModel):
     params: Any = None
 
 
-class NekteError(BaseModel):
+class NekteError(FrozenModel):
     code: int
     message: str
     data: Any = None
