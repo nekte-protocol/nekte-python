@@ -14,6 +14,7 @@ from .application.cache import CapabilityCache
 from .application.cancellation import CancellationToken
 from .application.client import NekteClient
 from .application.delegate_stream import DelegateStream
+from .application.server import NekteServer
 from .domain.errors import NekteProtocolError, TaskTransitionError
 from .domain.types import (
     NEKTE_ERRORS,
