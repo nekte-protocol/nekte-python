@@ -7,14 +7,42 @@ stale-while-revalidate, and token-cost awareness.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from ..domain.cache.token_cost import token_cost_for_level
-from ..domain.types import Capability, DiscoveryLevel
-from ..ports.cache_store import CacheGetResult, CacheStore, CacheStoreEntry
+from ..domain.types import (
+    Capability,
+    CapabilityRef,
+    CapabilitySchema,
+    CapabilitySummary,
+    DiscoveryLevel,
+)
+from ..ports.cache_store import CacheStore, CacheStoreEntry
 
-CacheEntryData = dict[str, Any]  # { levels, hash, max_level }
+CacheEntryData = dict[str, Any]
 RevalidationFn = Callable[[str, str], None]
+
+
+def _cap_id(cap: Capability) -> str:
+    """Extract id from any Capability variant."""
+    if isinstance(cap, (CapabilityRef, CapabilitySummary, CapabilitySchema)):
+        return cap.id
+    return str(getattr(cap, "id", ""))
+
+
+def _cap_hash(cap: Capability) -> str:
+    """Extract hash from any Capability variant."""
+    if isinstance(cap, (CapabilityRef, CapabilitySummary, CapabilitySchema)):
+        return cap.h
+    return str(getattr(cap, "h", ""))
+
+
+def _cap_dump(cap: Capability) -> dict[str, Any]:
+    """Dump capability to dict."""
+    if isinstance(cap, (CapabilityRef, CapabilitySummary, CapabilitySchema)):
+        return cap.model_dump()
+    return {k: v for k, v in vars(cap).items()} if hasattr(cap, "__dict__") else {}
 
 
 class CapabilityCache:
@@ -45,37 +73,54 @@ class CapabilityCache:
         level: DiscoveryLevel,
         ttl_ms: float | None = None,
     ) -> None:
-        key = self._key(agent_id, cap.id)  # type: ignore[union-attr]
+        cap_id = _cap_id(cap)
+        cap_hash = _cap_hash(cap)
+        key = self._key(agent_id, cap_id)
         self._negatives.pop(key, None)
 
         existing = self._store.get(key)
-        existing_data: CacheEntryData | None = (
-            existing.entry.data if existing else None  # type: ignore[union-attr]
+        existing_data: CacheEntryData | None = None
+        if existing is not None:
+            ed = existing.entry.data
+            if isinstance(ed, dict):
+                existing_data = ed
+
+        max_level: int = max(existing_data.get("max_level", 0), level) if existing_data else level
+
+        data: CacheEntryData = (
+            existing_data.copy() if existing_data else {"levels": {}, "hash": "", "max_level": 0}
         )
-        max_level = max(existing_data.get("max_level", 0), level) if existing_data else level
-
-        data: CacheEntryData = existing_data.copy() if existing_data else {"levels": {}, "hash": "", "max_level": 0}
-        data["hash"] = cap.h  # type: ignore[union-attr]
+        data["hash"] = cap_hash
         data["max_level"] = max_level
-        data["levels"][str(level)] = cap.model_dump() if hasattr(cap, "model_dump") else dict(cap)  # type: ignore[union-attr]
+        data["levels"][str(level)] = _cap_dump(cap)
 
-        self._store.set(key, CacheStoreEntry(
-            data=data,
-            cached_at=time.time() * 1000,
-            ttl_ms=ttl_ms or self._default_ttl_ms,
-            access_count=existing.entry.access_count if existing else 0,
-            token_cost=token_cost_for_level(max_level),
-        ))
+        self._store.set(
+            key,
+            CacheStoreEntry(
+                data=data,
+                cached_at=time.time() * 1000,
+                ttl_ms=ttl_ms or self._default_ttl_ms,
+                access_count=existing.entry.access_count if existing else 0,
+                token_cost=token_cost_for_level(max_level),  # type: ignore[arg-type]
+            ),
+        )
 
     def get_hash(self, agent_id: str, cap_id: str) -> str | None:
         entry = self._get_entry(agent_id, cap_id)
-        return entry.get("hash") if entry else None
+        if entry is None:
+            return None
+        h = entry.get("hash")
+        return str(h) if h is not None else None
 
     def get(self, agent_id: str, cap_id: str, level: DiscoveryLevel) -> dict[str, Any] | None:
         entry = self._get_entry(agent_id, cap_id)
         if entry is None:
             return None
-        return entry.get("levels", {}).get(str(level))
+        levels = entry.get("levels")
+        if not isinstance(levels, dict):
+            return None
+        result = levels.get(str(level))
+        return result if isinstance(result, dict) else None
 
     def is_valid(self, agent_id: str, cap_id: str, h: str) -> bool:
         return self.get_hash(agent_id, cap_id) == h
@@ -116,8 +161,8 @@ class CapabilityCache:
 
     def stats(self) -> dict[str, int]:
         agents: set[str] = set()
-        for key in self._store.keys():
-            without_ns = key[len(self._namespace):] if key.startswith(self._namespace) else key
+        for key in list(self._store.keys()):
+            without_ns = key[len(self._namespace) :] if key.startswith(self._namespace) else key
             agents.add(without_ns.split(":")[0])
         return {"size": self._store.size, "agents": len(agents), "negatives": len(self._negatives)}
 
@@ -138,7 +183,7 @@ class CapabilityCache:
             return None
         if result.freshness == "stale":
             self._trigger_revalidation(agent_id, cap_id, key)
-        return data  # type: ignore[return-value]
+        return data
 
     def _trigger_revalidation(self, agent_id: str, cap_id: str, key: str) -> None:
         if not self._revalidation_fn or key in self._revalidating:

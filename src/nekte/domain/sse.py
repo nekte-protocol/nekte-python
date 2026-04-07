@@ -7,12 +7,10 @@ from typing import Any, Literal, Union
 
 from pydantic import BaseModel
 
-from .types import DetailLevel, TaskStatus
-
-
 # ---------------------------------------------------------------------------
 # Event types
 # ---------------------------------------------------------------------------
+
 
 class SseProgressEvent(BaseModel):
     event: Literal["progress"] = "progress"
@@ -71,6 +69,7 @@ SSE_CONTENT_TYPE = "text/event-stream"
 # ---------------------------------------------------------------------------
 # Encode / Parse
 # ---------------------------------------------------------------------------
+
 
 def encode_sse_event(event: SseEvent) -> str:
     """Encode a NEKTE SSE event to text/event-stream format."""

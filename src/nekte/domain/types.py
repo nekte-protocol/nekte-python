@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 # Token Budget
 # ---------------------------------------------------------------------------
 
+
 class DetailLevel(str, Enum):
     MINIMAL = "minimal"
     COMPACT = "compact"
@@ -35,6 +36,7 @@ DiscoveryLevel = Literal[0, 1, 2]
 # ---------------------------------------------------------------------------
 # Capabilities
 # ---------------------------------------------------------------------------
+
 
 class CapabilityRef(BaseModel):
     id: str
@@ -59,6 +61,7 @@ Capability = Union[CapabilityRef, CapabilitySummary, CapabilitySchema]
 # ---------------------------------------------------------------------------
 # Agent Card
 # ---------------------------------------------------------------------------
+
 
 class AgentCard(BaseModel):
     nekte: str = "0.2"
@@ -95,6 +98,7 @@ class ContextEnvelope(BaseModel):
 # Multi-level result
 # ---------------------------------------------------------------------------
 
+
 class MultiLevelResult(BaseModel):
     minimal: Any | None = None
     compact: dict[str, Any] | None = None
@@ -111,6 +115,7 @@ class InvokeResult(BaseModel):
 # Verification
 # ---------------------------------------------------------------------------
 
+
 class VerificationProof(BaseModel):
     hash: str | None = None
     samples: int | None = None
@@ -123,8 +128,13 @@ class VerificationProof(BaseModel):
 # ---------------------------------------------------------------------------
 
 TaskStatus = Literal[
-    "pending", "accepted", "running",
-    "completed", "failed", "cancelled", "suspended",
+    "pending",
+    "accepted",
+    "running",
+    "completed",
+    "failed",
+    "cancelled",
+    "suspended",
 ]
 
 TerminalTaskStatus = Literal["completed", "failed", "cancelled"]
@@ -185,6 +195,7 @@ class NekteResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Method params
 # ---------------------------------------------------------------------------
+
 
 class DiscoverParams(BaseModel):
     level: DiscoveryLevel

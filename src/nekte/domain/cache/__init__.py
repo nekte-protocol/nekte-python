@@ -1,4 +1,5 @@
 """NEKTE Cache Domain — pure algorithms."""
 
-from .sieve_policy import SievePolicy  # noqa: F401
-from .token_cost import TOKEN_COST, token_cost_for_level  # noqa: F401
+from .sieve_policy import SievePolicy as SievePolicy
+from .token_cost import TOKEN_COST as TOKEN_COST
+from .token_cost import token_cost_for_level as token_cost_for_level

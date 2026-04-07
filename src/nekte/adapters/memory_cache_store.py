@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import random
 import time
-from typing import Iterator
+from collections.abc import Iterator
 
 from ..domain.cache.sieve_policy import SievePolicy
-from ..ports.cache_store import CacheGetResult, CacheStore, CacheStoreEntry
+from ..ports.cache_store import CacheGetResult, CacheStoreEntry
 
 
 class InMemoryCacheStore:

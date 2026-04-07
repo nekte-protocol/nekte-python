@@ -4,7 +4,6 @@ import pytest
 
 from nekte.domain.errors import TaskTransitionError
 from nekte.domain.task import (
-    TASK_TRANSITIONS,
     create_task_entry,
     is_active,
     is_cancellable,
@@ -18,7 +17,12 @@ from nekte.domain.types import Task, TokenBudget
 
 
 def make_task(id: str = "t-001") -> Task:
-    return Task(id=id, desc="test", timeout_ms=5000, budget=TokenBudget(max_tokens=100, detail_level="compact"))
+    return Task(
+        id=id,
+        desc="test",
+        timeout_ms=5000,
+        budget=TokenBudget(max_tokens=100, detail_level="compact"),
+    )
 
 
 def test_valid_transitions():

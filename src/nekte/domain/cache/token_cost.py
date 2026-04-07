@@ -5,8 +5,8 @@ from __future__ import annotations
 from ..types import DiscoveryLevel
 
 TOKEN_COST: dict[DiscoveryLevel, int] = {
-    0: 8,    # L0 catalog
-    1: 40,   # L1 summary
+    0: 8,  # L0 catalog
+    1: 40,  # L1 summary
     2: 120,  # L2 full schema
 }
 

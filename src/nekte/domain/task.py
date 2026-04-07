@@ -9,12 +9,11 @@ State Machine:
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from .errors import TaskTransitionError
 from .types import ContextEnvelope, Task, TaskStatus
-
 
 # ---------------------------------------------------------------------------
 # State machine
@@ -59,6 +58,7 @@ def is_resumable(status: TaskStatus) -> bool:
 # Value Objects
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class TaskCheckpoint:
     data: dict[str, Any]
@@ -76,6 +76,7 @@ class TaskTransition:
 # ---------------------------------------------------------------------------
 # Aggregate Root
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class TaskEntry:
@@ -108,12 +109,14 @@ def transition_task(entry: TaskEntry, to: TaskStatus, reason: str | None = None)
         raise TaskTransitionError(entry.task.id, entry.status, to)
 
     now = time.time()
-    entry.transitions.append(TaskTransition(
-        from_status=entry.status,
-        to_status=to,
-        timestamp=now,
-        reason=reason,
-    ))
+    entry.transitions.append(
+        TaskTransition(
+            from_status=entry.status,
+            to_status=to,
+            timestamp=now,
+            reason=reason,
+        )
+    )
     entry.status = to
     entry.updated_at = now
     return entry

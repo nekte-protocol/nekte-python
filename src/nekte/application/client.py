@@ -6,12 +6,12 @@ Does NOT know about HTTP, gRPC, or any transport specifics.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Literal
+from typing import Any, Literal
 
 from ..domain.budget import create_budget
 from ..domain.errors import NekteProtocolError
-from ..domain.sse import SseEvent
 from ..domain.types import (
+    WELL_KNOWN_PATH,
     AgentCard,
     ContextEnvelope,
     DiscoverParams,
@@ -19,14 +19,9 @@ from ..domain.types import (
     InvokeResult,
     NekteMethod,
     Task,
-    TaskCancelParams,
     TaskLifecycleResult,
-    TaskResumeParams,
-    TaskStatusParams,
     TaskStatusResult,
     TokenBudget,
-    NEKTE_ERRORS,
-    WELL_KNOWN_PATH,
 )
 from ..ports.transport import Transport
 from .cache import CapabilityCache
@@ -83,6 +78,7 @@ class NekteClient:
             for cap in dr.caps:
                 if "id" in cap and "h" in cap:
                     from ..domain.types import CapabilityRef
+
                     self._cache.set(self._agent_id, CapabilityRef(**cap), params.level)
 
         if not self._agent_id:
@@ -124,6 +120,7 @@ class NekteClient:
                 schema = err.data.get("schema")
                 if schema and isinstance(schema, dict) and "id" in schema:
                     from ..domain.types import CapabilityRef
+
                     self._cache.set(agent_id, CapabilityRef(**schema), 2)
                 # Retry without hash
                 retry_params = {"cap": cap_id, "in": input, "budget": b.model_dump()}
@@ -179,7 +176,8 @@ class NekteClient:
         }
         if budget:
             params["budget"] = budget.model_dump()
-        return await self._rpc("nekte.verify", params)
+        result = await self._rpc("nekte.verify", params)
+        return dict(result) if isinstance(result, dict) else {"data": result}
 
     async def close(self) -> None:
         await self._transport.close()
@@ -202,8 +200,10 @@ class NekteClient:
 
         async def refresh() -> None:
             try:
-                level = 2 if self._cache.get(agent_id, cap_id, 2) else (
-                    1 if self._cache.get(agent_id, cap_id, 1) else 0
+                level: Literal[0, 1, 2] = (
+                    2
+                    if self._cache.get(agent_id, cap_id, 2)
+                    else (1 if self._cache.get(agent_id, cap_id, 1) else 0)
                 )
                 await self.discover(DiscoverParams(level=level, filter={"id": cap_id}))
             except Exception:
@@ -211,6 +211,6 @@ class NekteClient:
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self._coalescer.coalesce(key, refresh))
+            _task = loop.create_task(self._coalescer.coalesce(key, refresh))  # noqa: RUF006
         except RuntimeError:
             pass  # No event loop — skip revalidation

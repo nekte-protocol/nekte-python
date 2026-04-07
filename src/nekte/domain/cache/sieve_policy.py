@@ -6,7 +6,7 @@ A FIFO queue + hand pointer + visited bit. Scan-resistant.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 K = TypeVar("K")

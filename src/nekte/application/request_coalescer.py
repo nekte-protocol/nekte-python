@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar, cast
 
 T = TypeVar("T")
 
@@ -18,11 +19,11 @@ class RequestCoalescer:
         """Execute fn for key, or join an in-flight request if one exists."""
         existing = self._inflight.get(key)
         if existing is not None:
-            return await existing
+            return cast(T, await existing)
 
         task = asyncio.create_task(self._run(key, fn))
         self._inflight[key] = task
-        return await task
+        return cast(T, await task)
 
     async def _run(self, key: str, fn: Callable[[], Awaitable[Any]]) -> Any:
         try:

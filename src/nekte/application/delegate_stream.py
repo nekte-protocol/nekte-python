@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
 from ..domain.sse import SseEvent
+
+CancelFn = Callable[[str | None], Awaitable[Any]]
 
 
 class DelegateStream:
@@ -14,7 +17,7 @@ class DelegateStream:
         self,
         task_id: str,
         events: AsyncIterator[SseEvent],
-        cancel_fn: object,  # Callable[[str | None], Awaitable[None]]
+        cancel_fn: CancelFn,
     ) -> None:
         self._task_id = task_id
         self._events = events
@@ -30,7 +33,7 @@ class DelegateStream:
 
     async def cancel(self, reason: str | None = None) -> None:
         """Cancel the task server-side."""
-        await self._cancel_fn(reason)  # type: ignore[misc]
+        await self._cancel_fn(reason)
 
     def __aiter__(self) -> AsyncIterator[SseEvent]:
         return self._events
